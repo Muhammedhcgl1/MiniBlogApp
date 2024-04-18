@@ -1,7 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:miniblog/blocs/posts/post_bloc.dart';
+import 'package:miniblog/blocs/posts/post_event.dart';
+import 'package:miniblog/blocs/posts/post_state.dart';
+import 'package:miniblog/screens/homepage.dart';
 
 class AddBlog extends StatefulWidget {
   const AddBlog({Key? key}) : super(key: key);
@@ -11,36 +15,6 @@ class AddBlog extends StatefulWidget {
 }
 
 class _AddBlogState extends State<AddBlog> {
-  final _formKey = GlobalKey<FormState>();
-  String blogTitle = "";
-  String blogContent = "";
-  XFile? selectedImage;
-  String author = "";
-
-  void _submit(BuildContext context) async {
-    if (selectedImage != null) {
-      Uri url = Uri.parse("https://tobetoapi.halitkalayci.com/api/Articles");
-
-      var request = http.MultipartRequest("POST", url);
-      request.fields["Title"] = blogTitle;
-      request.fields["Content"] = blogContent;
-      request.fields["Author"] = author;
-
-      final file =
-          await http.MultipartFile.fromPath("File", selectedImage!.path);
-      request.files.add(file);
-
-      final response = await request.send();
-
-      if (response.statusCode == 201) {
-        // Başarılı
-        if (context.mounted) {
-          Navigator.pop(context);
-        }
-      }
-    }
-  }
-
   void _pickImage() async {
     final imagePicker = ImagePicker();
     XFile? file = await imagePicker.pickImage(source: ImageSource.gallery);
@@ -50,9 +24,30 @@ class _AddBlogState extends State<AddBlog> {
     });
   }
 
+  final _formKey = GlobalKey<FormState>();
+  String blogTitle = "";
+  String blogContent = "";
+  XFile? selectedImage;
+  String author = "";
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return BlocListener<PostBloc, PostState>(
+      listener: (context, state) async {
+        if (state is AddDataSuccess && context.mounted) {
+          context.read<PostBloc>().add(FetchPost());
+          await Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => const Homepage(),
+            ),
+          );
+        }
+        if (state is AddDataFail && context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text("Data Gitmedi")));
+        }
+      },
+      child: Scaffold(
         appBar: AppBar(
           title: const Text("Yeni Blog Ekle"),
         ),
@@ -62,7 +57,7 @@ class _AddBlogState extends State<AddBlog> {
             child: Form(
               key: _formKey,
               child: Column(children: [
-                if (selectedImage != null)
+                if (selectedImage != null) //xxx
                   Image.file(
                     File(selectedImage!.path),
                     height: 250,
@@ -117,16 +112,26 @@ class _AddBlogState extends State<AddBlog> {
                 ),
                 ElevatedButton(
                     onPressed: () {
-                      if (_formKey.currentState!.validate()) {
-                        _formKey.currentState!.save();
-                        _submit(context);
+                      if (selectedImage != null) {
+                        if (_formKey.currentState!.validate()) {
+                          _formKey.currentState!.save();
+                          context.read<PostBloc>().add(AddPost(
+                              blogTitle: blogTitle,
+                              blogContent: blogContent,
+                              imagePath: selectedImage!.path,
+                              author: author));
+                        }
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Lütfen Resim seç!")));
                       }
                     },
                     child: const Text("Kaydet"))
               ]),
             ),
           ),
-        ));
+        ),
+      ),
+    );
   }
 }
-// 10:05

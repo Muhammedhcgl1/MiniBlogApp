@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:miniblog/blocs/posts/post_bloc.dart';
+import 'package:miniblog/blocs/posts/post_event.dart';
+import 'package:miniblog/blocs/posts/post_state.dart';
 import 'package:miniblog/cards/post_card.dart';
 import 'package:miniblog/models/post_model.dart';
 import 'package:miniblog/screens/add_blog.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert' as convert;
 
 //Put işlemi      +++++++++++++++
 //future builder  +++
@@ -22,76 +24,55 @@ class Homepage extends StatefulWidget {
 }
 
 class _HomepageState extends State<Homepage> {
-  // _changeTheme(bool value) {
-  //   setState(() {
-  //     _writeThemeData(value);
-  //   });
-  // }
-
-  // _writeThemeData(bool value) async {
-  //   SharedPreferences preferences = await SharedPreferences.getInstance();
-  //   preferences.setBool("DARKTHEME", value);
-  // }
-  Future<List<PostModel>> _getPost() async {
-    Uri url = Uri.parse("https://tobetoapi.halitkalayci.com/api/Articles");
-    http.Response res = await http.get(url);
-    if (res.statusCode == 200) {
-      List jsonresponse = convert.jsonDecode(res.body);
-      List data = jsonresponse.reversed.toList();
-      return data.map((e) => PostModel.fromMap(e)).toList();
-    } else {
-      throw Exception("Hata ${res.statusCode}");
-    }
-  }
-
   late Future<List<PostModel>> dataFromApi;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-        appBar: AppBar(
-          title: const Text("Ana Sayfa"),
-          actions: [
-            IconButton(
-                onPressed: () {
-                  Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (ctx) => AddBlog()));
-                },
-                icon: const Icon(Icons.add)),
-            IconButton(
-                onPressed: () {
-                  setState(() {});
-                  dataFromApi = _getPost();
-                },
-                icon: const Icon(Icons.refresh))
-          ],
-        ),
-        body: Container(
-          color: const Color.fromARGB(255, 255, 255, 255),
-          padding: const EdgeInsets.all(5),
-          child: RefreshIndicator(
-            child: FutureBuilder(
-              future: _getPost(),
-              builder: (context, snapshot) {
-                if (snapshot.data == null) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
-                } else {
-                  return ListView.builder(
-                    itemBuilder: (context, index) {
-                      return PostCard(postModel: snapshot.data![index]);
-                    },
-                    itemCount: snapshot.data!.length,
-                  );
-                }
-              },
+    return BlocBuilder<PostBloc, PostState>(
+      builder: (context, state) {
+        if (state is PostNotLoaded) {
+          context.read<PostBloc>().add(FetchPost());
+          return const Scaffold(
+            body: Center(
+              child: Text("Yükleme İşlemi Başlamadı"),
             ),
-            onRefresh: () {
-              setState(() {});
-              return _getPost();
-            },
-          ),
-        ));
+          );
+        }
+
+        if (state is PostLoading) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (state is PostLoaded) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text("Ana Sayfa"),
+              actions: [
+                IconButton(
+                    onPressed: () {
+                      Navigator.of(context)
+                          .push(MaterialPageRoute(builder: (ctx) => AddBlog()));
+                    },
+                    icon: const Icon(Icons.add)),
+                IconButton(
+                  onPressed: () {
+                    context.read<PostBloc>().add(FetchPost());
+                  },
+                  icon: const Icon(Icons.refresh),
+                )
+              ],
+            ),
+            body: ListView.builder(
+              itemBuilder: (context, index) {
+                return PostCard(postModel: state.blogs[index]);
+              },
+              itemCount: state.blogs.length,
+            ),
+          );
+        }
+        return const Text("Bir Hata Oluştu");
+      },
+    );
   }
 }
